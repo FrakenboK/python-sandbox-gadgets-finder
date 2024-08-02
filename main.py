@@ -1,5 +1,3 @@
-import uuid
-
 SEARCH_GADGETS = {
     # RCE modules
     "os": set(),
@@ -32,20 +30,20 @@ SEARCH_GADGETS = {
     "__builtins__": set(),
 }
 
-MAX_DEPTH = 3
+MAX_DEPTH = 5
 
 def check_recursive(element, depth, prev_name):
     if depth > MAX_DEPTH:
         return
     
-    for key in SEARCH_GADGETS:
-        if (key in dir(element)):
-            print(f"\t{prev_name}.{key}")
-        elif type(element) is dict and key in element:
-            print(f"\t{prev_name}[\"{key}\"]")
+    if "_" in prev_name:
+        return
     
     # For attributes
     for new_element in dir(element):
+        if (new_element in SEARCH_GADGETS):
+            print(f"\t{prev_name}.{new_element}")
+            continue
         try:
             check_recursive(getattr(element, new_element), depth+1, f"{prev_name}.{new_element}")
         except:
@@ -54,16 +52,31 @@ def check_recursive(element, depth, prev_name):
     # For dicts
     if type(element) is dict:
         for new_element in element:
-            check_recursive(element[new_element], depth + 1, f"{prev_name}[{new_element}]")
+            if (new_element in SEARCH_GADGETS):
+                print(f"\t{prev_name}[\"{new_element}\"]")
+                continue
+            check_recursive(element[new_element], depth + 1, f"{prev_name}[\"{new_element}\"]")
 
 
 def main():
+    # Your module goes here
+    module = __import__("uuid")
+
     # Example with uuid:
-    total = [uuid]
-    for _, element in enumerate(total):
-        print(f"[Checking for {element.__name__}]\n")
+    total = dict()
+    
+    total.update({name: getattr(module, name) for name in dir(module)})
+    
+    total.update({name: func for name, func in module.__dict__.items() if not isinstance(func, list)})
+
+    # TODO:
+    #   Don't print module if no findings
+    for name in total:
         depth = 1
-        check_recursive(element, depth, element.__name__)
+        element = total[name]
+        print(f"[Searching gadgets for {module.__name__}.{name}]\n")
+        check_recursive(element, depth, f"{module.__name__}.{name}")
+        print()
 
 if __name__ == "__main__":
     main()
